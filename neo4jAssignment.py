@@ -15,14 +15,30 @@ class Neo4JConnector:
         with self.driver.session() as session:
             session.execute_write(self._create_links, page, links)
 
+    def flush_db(self):
+        print("clearing graph db")
+        with self.driver.session() as session:
+            session.execute_write(self._flush_db)
+
     @staticmethod
     def _create_links(tx, page, links):
+        page = page.decode('utf-8')
+        tx.run("CREATE (:Page {url: $page})", page=page)
         for link in links:
-            tx.run("CREATE (:Page {url: $link}) -[:LINKS_TO]-> (:Page {url: $page})",
-                page=page, link=str(link))
+            tx.run("MATCH (p:Page) WHERE p.url = $page "
+                "CREATE (:Page {url: $link}) -[:LINKS_TO]-> (p)",
+                link=link, page=page)
+            # tx.run("CREATE (:Page {url: $link}) -[:LINKS_TO]-> (:Page {url: $page})",
+            #     link=link, page=page.decode('utf-8'))
+
+    @staticmethod
+    def _flush_db(tx):
+        tx.run("MATCH (a) -[r]-> () DELETE a, r")
+        tx.run("MATCH (a) DELETE a")
 
 
 neo4j_connector = Neo4JConnector("bolt://localhost:7687", "neo4j", "Puffles12")
+neo4j_connector.flush_db()
 
 config = configparser.ConfigParser()
 config.read('example.ini')
